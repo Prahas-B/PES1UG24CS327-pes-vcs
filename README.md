@@ -376,7 +376,11 @@ The test program verifies:
 
 **📸 Screenshot 1A:** Output of `./test_objects` showing all tests passing.
 
+![Screenshot 1A](screenshot/1a.jpeg)
+
 **📸 Screenshot 1B:** `find .pes/objects -type f` showing the sharded directory structure.
+
+![Screenshot 1B](screenshot/1b.jpeg)
 
 ---
 
@@ -408,7 +412,9 @@ The test program verifies:
 
 **📸 Screenshot 2A:** Output of `./test_tree` showing all tests passing.
 
-**📸 Screenshot 2B:** Pick a tree object from `find .pes/objects -type f` and run `xxd .pes/objects/XX/YYY... | head -20` to show the raw binary format.
+![Screenshot 2A](screenshot/2a.jpeg)
+
+**📸 Screenshot 2B:** *(not captured)*
 
 ---
 
@@ -464,9 +470,11 @@ echo "world" > file2.txt
 cat .pes/index    # Human-readable text format
 ```
 
-**📸 Screenshot 3A:** Run `./pes init`, `./pes add file1.txt file2.txt`, `./pes status` — show the output.
+**📸 Screenshot 3A:** *(not captured)*
 
 **📸 Screenshot 3B:** `cat .pes/index` showing the text-format index with your entries.
+
+![Screenshot 3B](screenshot/3b.jpeg)
 
 ---
 
@@ -517,9 +525,15 @@ make test-integration
 
 **📸 Screenshot 4A:** Output of `./pes log` showing three commits with hashes, authors, timestamps, and messages.
 
+![Screenshot 4A](screenshot/4a.jpeg)
+
 **📸 Screenshot 4B:** `find .pes -type f | sort` showing object store growth after three commits.
 
+![Screenshot 4B](screenshot/4b.jpeg)
+
 **📸 Screenshot 4C:** `cat .pes/refs/heads/main` and `cat .pes/HEAD` showing the reference chain.
+
+![Screenshot 4C](screenshot/4c.jpeg)
 
 ---
 
