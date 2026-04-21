@@ -9,7 +9,6 @@
 // TODO functions:     object_write, object_read
 
 #include "pes.h"
-#include "object.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -113,9 +112,22 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     if (object_exists(id_out)) {
       free(buffer);
       return 0;  // already stored → no need to write again
-}
+    }
     char path[512];
-    object_path(id_out, path);
+    object_path(id_out, path,sizeof(path));
+
+    char dir_path[512];
+    strncpy(dir_path, path, sizeof(dir_path));
+
+    char *slash = strrchr(dir_path, '/');
+    if (!slash) {
+       free(buffer);
+       return -1;
+    }
+
+    *slash = '\0';   // remove filename → keep directory
+
+    mkdir(dir_path, 0755);
 
     free(buffer);
     return 0;
