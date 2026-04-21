@@ -531,15 +531,111 @@ The following questions cover filesystem concepts beyond the implementation scop
 
 **Q5.1:** A branch in Git is just a file in `.git/refs/heads/` containing a commit hash. Creating a branch is creating a file. Given this, how would you implement `pes checkout <branch>` — what files need to change in `.pes/`, and what must happen to the working directory? What makes this operation complex?
 
+**Answer:**
+
+To implement `pes checkout <branch>`, three things must happen:
+
+1. **Update HEAD** — Write `ref: refs/heads/<branch>` into `.pes/HEAD` so it now points to the new branch.
+2. **Read the target commit** — Open `.pes/refs/heads/<branch>`, read the commit hash, load the commit object, and extract its tree hash.
+3. **Update the working directory** — Recursively walk the target tree object. For each blob entry, read the blob from the object store and overwrite the corresponding file on disk. Directories present in the new tree but not currently on disk must be created. Files tracked in the old tree but absent from the new tree must be deleted. Finally, update `.pes/index` to reflect the new branch's file state.
+
+**What makes this complex:**
+- **Deletions:** Files that existed in the old branch but not the new one must be removed from disk.
+- **Conflict detection:** If the user has uncommitted local changes to a file that differs between branches, checkout must refuse rather than silently overwrite those changes.
+- **Atomicity:** A crash midway through updating the working directory can leave the repository in a broken, half-switched state. A robust implementation would update files one by one and maintain enough state to recover or roll back.
+
+---
+
 **Q5.2:** When switching branches, the working directory must be updated to match the target branch's tree. If the user has uncommitted changes to a tracked file, and that file differs between branches, checkout must refuse. Describe how you would detect this "dirty working directory" conflict using only the index and the object store.
 
+**Answer:**
+
+For each file tracked in the current index, compare three versions:
+
+1. **Index entry** — the staged hash and metadata (mtime, size) stored in `.pes/index`.
+2. **Working directory file** — the current mtime and size obtained via `lstat()`.
+3. **Target branch's tree** — the blob hash for that file in the target commit's tree object.
+
+**Detection logic:**
+- A file is *locally modified* if its current mtime or size differs from what is recorded in the index entry. This is the same fast-check that `pes status` uses — no re-hashing needed.
+- A file *differs between branches* if the blob hash in the target branch's tree differs from the hash stored in the current index entry.
+
+**A conflict exists** when both conditions are true: the file has uncommitted local changes AND the target branch has a different version of that file. In this case, checkout must refuse with an error like `"error: your local changes to 'file.txt' would be overwritten by checkout"`.
+
+If only one condition is true — the file is locally modified but identical between branches, or it differs between branches but has no local changes — checkout can proceed safely.
+
+---
+
 **Q5.3:** "Detached HEAD" means HEAD contains a commit hash directly instead of a branch reference. What happens if you make commits in this state? How could a user recover those commits?
+
+**Answer:**
+
+In detached HEAD state, `.pes/HEAD` contains a raw commit hash (e.g., `a1b2c3d4...`) instead of `ref: refs/heads/main`.
+
+**What happens when you commit:** New commits are created normally — each commit correctly points to its parent via the `has_parent`/`parent` fields. However, `head_update` writes the new commit hash directly into `.pes/HEAD` rather than into a branch file under `.pes/refs/heads/`. This means no branch pointer advances to track these new commits.
+
+**The danger:** As soon as the user switches to another branch, `HEAD` is overwritten with that branch's reference. The commits made in detached HEAD state become *unreachable* — no branch points to them, so they cannot be found via normal `pes log`. They still exist in the object store but are invisible until garbage collected.
+
+**Recovery:** The user must remember the commit hash from their terminal history or from `pes log` output taken while still in detached HEAD state. They can then recover by manually creating a new branch pointing to that hash:
+```bash
+echo "<commit-hash>" > .pes/refs/heads/recovered
+echo "ref: refs/heads/recovered" > .pes/HEAD
+```
+This makes the detached commits reachable again under the `recovered` branch.
+
+---
 
 ### Garbage Collection and Space Reclamation
 
 **Q6.1:** Over time, the object store accumulates unreachable objects — blobs, trees, or commits that no branch points to (directly or transitively). Describe an algorithm to find and delete these objects. What data structure would you use to track "reachable" hashes efficiently? For a repository with 100,000 commits and 50 branches, estimate how many objects you'd need to visit.
 
+**Answer:**
+
+**Algorithm — Mark and Sweep:**
+
+**Mark phase:**
+1. Start from every file in `.pes/refs/heads/`. For each branch, read its commit hash.
+2. Perform a full graph traversal from each commit:
+   - Load the commit object, add its hash to the *reachable set*.
+   - Recurse into its parent commit (if any) and repeat.
+   - Load the commit's tree object, add its hash to the reachable set.
+   - Recursively walk all subtree objects, adding each tree hash.
+   - For every blob entry in every tree, add the blob hash to the reachable set.
+
+**Sweep phase:**
+3. Walk every file under `.pes/objects/` by iterating the shard directories.
+4. For each object file, reconstruct its hash from its directory + filename.
+5. If the hash is **not** in the reachable set, delete the file.
+
+**Data structure:** A hash set (hash table of 64-character hex strings) gives O(1) average-case membership checks. In C this could be implemented as a simple open-addressing hash table or using a sorted array with binary search.
+
+**Estimate for 100,000 commits, 50 branches:**
+- Assuming an average of ~10 objects per commit (1 commit + 2 trees + 7 blobs), the total object count is roughly **1,000,000 objects**.
+- The mark phase visits all reachable objects — approximately 1,000,000 traversals.
+- The sweep phase walks every file in `.pes/objects/` — also approximately 1,000,000 file checks.
+- Total: roughly **2,000,000 object visits** across both phases.
+
+---
+
 **Q6.2:** Why is it dangerous to run garbage collection concurrently with a commit operation? Describe a race condition where GC could delete an object that a concurrent commit is about to reference. How does Git's real GC avoid this?
+
+**Answer:**
+
+**The race condition:**
+
+1. A commit operation calls `object_write` for a new blob and successfully writes it to `.pes/objects/XX/YYY...`.
+2. GC starts its **mark phase** — it reads all branch refs and walks all reachable objects. At this exact moment, the new blob exists on disk but the commit object that will reference it has not been written yet. GC does not see the blob as reachable.
+3. GC proceeds to its **sweep phase** and deletes the new blob as an "unreachable" object.
+4. The commit operation now writes the commit object that references the deleted blob. The repository is now **corrupt** — the commit points to a blob that no longer exists.
+
+**How Git avoids this:**
+
+Git uses several strategies to prevent this race:
+
+1. **Grace period:** Git's GC never deletes objects newer than 2 weeks old (configurable via `gc.pruneExpire`). Since in-progress commit operations complete in seconds, this window ensures no live operation's objects are pruned.
+2. **Write order:** Objects are always written to the store *before* any ref is updated. This means a partially complete commit always has its blob and tree objects present even if the final commit object or ref update hasn't happened yet.
+3. **Lock files:** Git uses `.lock` files on refs during updates. GC can detect active writers by checking for these lock files and either wait or abort.
+4. **`keep` files:** For pack operations, Git creates `.keep` files to mark packs that must not be deleted, preventing GC from touching objects still in use.
 
 ---
 
