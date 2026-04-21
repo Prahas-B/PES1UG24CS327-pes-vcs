@@ -114,6 +114,12 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
       free(buffer);
       return 0;  // already stored → no need to write again
 }
+    char path[512];
+    object_path(id_out, path);
+
+    free(buffer);
+    return 0;
+}
 
 // Read an object from the store.
 //
