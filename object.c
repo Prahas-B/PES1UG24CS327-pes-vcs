@@ -106,6 +106,8 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     buffer[header_len] = '\0';
     memcpy(buffer + header_len + 1, data, len);
 
+    // Step 3: compute hash
+    compute_hash(buffer, total_len, id_out);
     return 0;
 }
 
