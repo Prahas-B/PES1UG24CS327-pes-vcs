@@ -10,6 +10,8 @@
 //   "100644 hello.txt\0" followed by 32 raw bytes of SHA-256
 
 #include "tree.h"
+#include "index.h"
+#include "pes.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -129,14 +131,6 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 //   - object_write    : save that binary buffer to the store as OBJ_TREE
 //
 // Returns 0 on success, -1 on error.
-int tree_from_index(ObjectID *id_out) {
-    // TODO: Implement recursive tree building
-    // (See Lab Appendix for logical steps)
-    (void)id_out;
-    return -1;
-}
-// ===== Phase 2 =====
-
 static int write_tree_level(IndexEntry **entries, int count, int depth, ObjectID *id_out) {
     Tree tree;
     tree.count = 0;
@@ -217,11 +211,48 @@ static int write_tree_level(IndexEntry **entries, int count, int depth, ObjectID
 
     return ret;
 }
+
+
+    // TODO: implement
+
+
 int tree_from_index(ObjectID *id_out) {
     Index index;
     if (index_load(&index) != 0) return -1;
 
-    // TODO: implement
+    if (index.count == 0) {
+        Tree t;
+        t.count = 0;
 
-    return -1;
+        void *data;
+        size_t len;
+
+        if (tree_serialize(&t, &data, &len) != 0)
+            return -1;
+
+        int ret = object_write(OBJ_TREE, data, len, id_out);
+        free(data);
+        return ret;
+    }
+
+    // sort
+    for (int i = 0; i < index.count - 1; i++) {
+        for (int j = i + 1; j < index.count; j++) {
+            if (strcmp(index.entries[i].path, index.entries[j].path) > 0) {
+                IndexEntry tmp = index.entries[i];
+                index.entries[i] = index.entries[j];
+                index.entries[j] = tmp;
+            }
+        }
+    }
+
+    IndexEntry *ptrs[MAX_INDEX_ENTRIES];
+    for (int i = 0; i < index.count; i++)
+        ptrs[i] = &index.entries[i];
+
+    return write_tree_level(ptrs, index.count, 0, id_out);
 }
+
+// ===== Phase 2 =====
+
+
