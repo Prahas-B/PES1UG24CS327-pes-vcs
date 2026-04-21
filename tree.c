@@ -135,3 +135,22 @@ int tree_from_index(ObjectID *id_out) {
     (void)id_out;
     return -1;
 }
+// ===== Phase 2 =====
+
+static int write_tree_level(IndexEntry **entries, int count, int depth, ObjectID *id_out) {
+    Tree tree;
+    tree.count = 0;
+
+    // TODO: implement
+
+    return -1;
+}
+
+int tree_from_index(ObjectID *id_out) {
+    Index index;
+    if (index_load(&index) != 0) return -1;
+
+    // TODO: implement
+
+    return -1;
+}
