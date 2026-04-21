@@ -95,8 +95,18 @@ int object_exists(const ObjectID *id) {
 // Returns 0 on success, -1 on error.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
     // TODO: Implement
-    (void)type; (void)data; (void)len; (void)id_out;
-    return -1;
+    const char *type_str = "blob";   // for now only blob
+    char header[64];
+    int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len);
+
+    size_t total_len = header_len + 1 + len;
+
+    char *buffer = malloc(total_len);
+    memcpy(buffer, header, header_len);
+    buffer[header_len] = '\0';
+    memcpy(buffer + header_len + 1, data, len);
+
+    return 0;
 }
 
 // Read an object from the store.
@@ -126,3 +136,6 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     (void)id; (void)type_out; (void)data_out; (void)len_out;
     return -1;
 }
+
+
+
