@@ -141,7 +141,34 @@ static int write_tree_level(IndexEntry **entries, int count, int depth, ObjectID
     Tree tree;
     tree.count = 0;
 
-    // TODO: implement
+    int i = 0;
+    while (i < count) {
+        const char *path = entries[i]->path;
+
+        const char *p = path;
+        for (int d = 0; d < depth; d++) {
+            p = strchr(p, '/');
+            if (!p) return -1;
+            p++;
+        }
+
+        const char *slash = strchr(p, '/');
+
+        if (!slash) {
+            // FILE CASE
+            TreeEntry *e = &tree.entries[tree.count++];
+            e->mode = entries[i]->mode;
+            e->hash = entries[i]->hash;
+
+            strncpy(e->name, p, sizeof(e->name) - 1);
+            e->name[sizeof(e->name) - 1] = '\0';
+
+            i++;
+        } else {
+            // TODO next commit
+            return -1;
+        }
+    }
 
     return -1;
 }
