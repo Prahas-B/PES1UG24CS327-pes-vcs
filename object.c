@@ -9,6 +9,7 @@
 // TODO functions:     object_write, object_read
 
 #include "pes.h"
+#include "object.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -108,7 +109,10 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 
     // Step 3: compute hash
     compute_hash(buffer, total_len, id_out);
-    return 0;
+// Step 4: check if object already exists
+    if (object_exists(id_out)) {
+      free(buffer);
+      return 0;  // already stored → no need to write again
 }
 
 // Read an object from the store.
